@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "FerreStock 360",
+    "slug": "ferrestock360-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "ferrestock",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": ["expo-router"]
+  }
+}
