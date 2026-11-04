@@ -8,3 +8,12 @@ npm-debug.*
 *.orig.*
 .env
 .env.local
+.env.*
+!.env.example
+
+# Credenciales de Firebase / Google - nunca subir al repositorio
+serviceAccount*.json
+*serviceAccount.json
+firebase-adminsdk*.json
+google-services.json
+GoogleService-Info.plist

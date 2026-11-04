@@ -11,11 +11,14 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
+import Banner from "../src/components/Banner";
 import Brand from "../src/components/Brand";
 import PrimaryButton from "../src/components/PrimaryButton";
 import TextField from "../src/components/TextField";
 import { colors } from "../src/constants/colors";
 import { espaciado, radio, tipografia } from "../src/constants/theme";
+import { useAuth } from "../src/contexts/AuthContext";
+import { mensajeErrorFirebase } from "../src/utils/firebaseErrors";
 
 type Errores = {
   nombre?: string;
@@ -25,6 +28,8 @@ type Errores = {
 };
 
 export default function RegisterScreen() {
+  const { registrarUsuario, firebaseListo } = useAuth();
+
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,15 +37,18 @@ export default function RegisterScreen() {
   const [errores, setErrores] = useState<Errores>({});
   const [cargando, setCargando] = useState(false);
   const [exito, setExito] = useState<string | null>(null);
+  const [mensajeError, setMensajeError] = useState<string | null>(null);
 
   const limpiarError = (campo: keyof Errores) => {
     if (errores[campo]) setErrores({ ...errores, [campo]: undefined });
   };
 
-  const registrar = () => {
+  const registrar = async () => {
     const nuevos: Errores = {};
-    if (!nombre.trim()) nuevos.nombre = "Ingresa tu nombre.";
+    if (!nombre.trim()) nuevos.nombre = "Ingresa tu nombre completo.";
     if (!email.trim()) nuevos.email = "Ingresa tu correo electrónico.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
+      nuevos.email = "Ingresa un correo electrónico válido.";
     if (password.length < 6)
       nuevos.password = "La contraseña debe tener al menos 6 caracteres.";
     if (confirmar !== password || !confirmar)
@@ -48,14 +56,17 @@ export default function RegisterScreen() {
     setErrores(nuevos);
     if (Object.keys(nuevos).length > 0) return;
 
+    setMensajeError(null);
     setCargando(true);
-    setTimeout(() => {
+    try {
+      await registrarUsuario(nombre, email, password);
+      setExito("Cuenta creada correctamente. Redirigiendo al inicio...");
+      // La redirección la gestiona el AuthContext con la sesión activa.
+    } catch (error) {
+      setMensajeError(mensajeErrorFirebase(error));
+    } finally {
       setCargando(false);
-      setExito(
-        "Cuenta creada correctamente. Redirigiendo al inicio de sesión..."
-      );
-      setTimeout(() => router.replace("/login"), 1500);
-    }, 900);
+    }
   };
 
   return (
@@ -80,6 +91,21 @@ export default function RegisterScreen() {
                 Únete y gestiona tu inventario
               </Text>
             </View>
+
+            {!firebaseListo && (
+              <Banner
+                tipo="error"
+                texto="Firebase no está configurado. Completa el archivo .env para registrarte (ver .env.example)."
+              />
+            )}
+
+            {!!mensajeError && (
+              <Banner
+                tipo="error"
+                texto={mensajeError}
+                onCerrar={() => setMensajeError(null)}
+              />
+            )}
 
             {!!exito && (
               <View style={styles.bannerExito}>

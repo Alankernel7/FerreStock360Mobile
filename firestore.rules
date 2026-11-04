@@ -1,0 +1,82 @@
+rules_version = '2';
+
+// Reglas de seguridad de Cloud Firestore - FerreStock360 Mobile.
+// - Los datos privados (perfil, favoritos, historial) pertenecen al usuario autenticado.
+// - El catálogo (products/categories) es de lectura pública y solo lo escribe un admin.
+// - Ningún usuario puede modificar su propio rol.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // true si el usuario autenticado tiene rol "admin" en su perfil.
+    function esAdmin() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'admin';
+    }
+
+    // ---------------------------------------------------------------- users
+    match /users/{uid} {
+      // Cada usuario solo puede leer su propio perfil.
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      // El usuario autenticado crea SU perfil con rol inicial "usuario"
+      // (impide autoasignarse otro rol al registrarse).
+      allow create: if request.auth != null &&
+        request.auth.uid == uid &&
+        request.resource.data.uid == uid &&
+        request.resource.data.rol == 'usuario' &&
+        request.resource.data.nombre is string &&
+        request.resource.data.nombre.size() > 0 &&
+        request.resource.data.email is string;
+
+      // Actualiza datos básicos; rol, correo, uid, estado y fecha quedan fijos
+      // (solo un admin puede cambiarlos desde la consola).
+      allow update: if request.auth != null &&
+        request.auth.uid == uid &&
+        request.resource.data.uid == resource.data.uid &&
+        request.resource.data.email == resource.data.email &&
+        request.resource.data.rol == resource.data.rol &&
+        request.resource.data.estado == resource.data.estado &&
+        request.resource.data.fecha_creacion == resource.data.fecha_creacion;
+
+      allow delete: if false;
+    }
+
+    // ------------------------------------------------------------- products
+    // Catálogo: lectura pública; escritura solo para administradores.
+    match /products/{productoId} {
+      allow read: if true;
+      allow create, update, delete: if esAdmin();
+    }
+
+    // ----------------------------------------------------------- categories
+    match /categories/{categoriaId} {
+      allow read: if true;
+      allow create, update, delete: if esAdmin();
+    }
+
+    // ------------------------------------------------------------- favorites
+    // Cada usuario administra sus propios favoritos (agregar/quitar).
+    match /favorites/{favoritoId} {
+      allow read: if request.auth != null &&
+        request.auth.uid == resource.data.uid;
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.uid &&
+        request.resource.data.producto_id is string;
+      allow update: if false;
+      allow delete: if request.auth != null &&
+        request.auth.uid == resource.data.uid;
+    }
+
+    // ------------------------------------------------------ activity_history
+    // Historial de solo lectura para su dueño; inmutable tras crearse.
+    match /activity_history/{actividadId} {
+      allow read: if request.auth != null &&
+        request.auth.uid == resource.data.uid;
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.uid &&
+        request.resource.data.tipo is string &&
+        request.resource.data.descripcion is string;
+      allow update, delete: if false;
+    }
+  }
+}

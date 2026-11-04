@@ -13,37 +13,75 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import Banner from "../src/components/Banner";
 import Brand from "../src/components/Brand";
 import PrimaryButton from "../src/components/PrimaryButton";
 import TextField from "../src/components/TextField";
 import { colors } from "../src/constants/colors";
 import { espaciado, radio, tipografia } from "../src/constants/theme";
+import { useAuth } from "../src/contexts/AuthContext";
+import { useGoogleAuth } from "../src/hooks/useGoogleAuth";
+import { mensajeErrorFirebase } from "../src/utils/firebaseErrors";
 
 type Errores = { email?: string; password?: string };
 
 export default function LoginScreen() {
+  const { iniciarSesion, iniciarSesionConGoogle, recuperarPassword, firebaseListo } =
+    useAuth();
+  const { solicitarGoogle, cargando: cargandoGoogle, disponible: googleDisponible } =
+    useGoogleAuth();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [recordarme, setRecordarme] = useState(false);
   const [errores, setErrores] = useState<Errores>({});
   const [cargando, setCargando] = useState(false);
+  const [mensajeError, setMensajeError] = useState<string | null>(null);
 
-  const iniciarSesion = () => {
+  const iniciarSesionEmail = async () => {
     const nuevos: Errores = {};
     if (!email.trim()) nuevos.email = "Ingresa tu correo electrónico.";
     if (!password) nuevos.password = "Ingresa tu contraseña.";
     setErrores(nuevos);
     if (Object.keys(nuevos).length > 0) return;
 
+    setMensajeError(null);
     setCargando(true);
-    setTimeout(() => {
+    try {
+      await iniciarSesion(email, password);
+      // La redirección la gestiona el AuthContext (sesión activa → Inicio).
+    } catch (error) {
+      setMensajeError(mensajeErrorFirebase(error));
+    } finally {
       setCargando(false);
+    }
+  };
+
+  const iniciarSesionGoogle = async () => {
+    setMensajeError(null);
+    try {
+      const idToken = await solicitarGoogle();
+      if (!idToken) return; // El usuario canceló el flujo.
+      await iniciarSesionConGoogle(idToken);
+    } catch (error) {
+      setMensajeError(mensajeErrorFirebase(error));
+    }
+  };
+
+  const recuperar = async () => {
+    if (!email.trim()) {
+      setErrores({ email: "Ingresa tu correo electrónico para recuperarla." });
+      return;
+    }
+    try {
+      await recuperarPassword(email);
       Alert.alert(
-        "Modo demo",
-        "Inicio de sesión simulado: el backend aún no está conectado en esta fase.",
-        [{ text: "Continuar", onPress: () => router.replace("/catalogo") }]
+        "Correo enviado",
+        "Te enviamos un enlace para restablecer tu contraseña. Revisa tu bandeja de entrada."
       );
-    }, 900);
+    } catch (error) {
+      Alert.alert("Recuperar contraseña", mensajeErrorFirebase(error));
+    }
   };
 
   return (
@@ -66,6 +104,21 @@ export default function LoginScreen() {
               <Text style={styles.titulo}>Bienvenido</Text>
               <Text style={styles.subtitulo}>Inicia sesión en tu cuenta</Text>
             </View>
+
+            {!firebaseListo && (
+              <Banner
+                tipo="error"
+                texto="Firebase no está configurado. Completa el archivo .env para iniciar sesión (ver .env.example)."
+              />
+            )}
+
+            {!!mensajeError && (
+              <Banner
+                tipo="error"
+                texto={mensajeError}
+                onCerrar={() => setMensajeError(null)}
+              />
+            )}
 
             <TextField
               etiqueta="Correo electrónico"
@@ -114,23 +167,30 @@ export default function LoginScreen() {
                 <Text style={styles.recordarmeTexto}>Recordarme</Text>
               </Pressable>
 
-              <Pressable
-                hitSlop={6}
-                onPress={() =>
-                  Alert.alert(
-                    "Recuperar contraseña",
-                    "Esta función estará disponible al conectar el backend."
-                  )
-                }
-              >
+              <Pressable hitSlop={6} onPress={recuperar}>
                 <Text style={styles.olvide}>¿Olvidaste tu contraseña?</Text>
               </Pressable>
             </View>
 
             <PrimaryButton
               titulo={cargando ? "Iniciando sesión..." : "Iniciar sesión"}
-              onPress={iniciarSesion}
+              onPress={iniciarSesionEmail}
               cargando={cargando}
+            />
+
+            <View style={styles.separador}>
+              <View style={styles.linea} />
+              <Text style={styles.separadorTexto}>o continúa con</Text>
+              <View style={styles.linea} />
+            </View>
+
+            <PrimaryButton
+              titulo="Google"
+              icono="logo-google"
+              variante="contorno"
+              onPress={iniciarSesionGoogle}
+              cargando={cargandoGoogle}
+              deshabilitado={!googleDisponible || cargando}
             />
 
             <Pressable
@@ -218,6 +278,20 @@ const styles = StyleSheet.create({
     fontSize: tipografia.sm,
     color: colors.yellowDark,
     fontWeight: "600",
+  },
+  separador: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: espaciado.md,
+  },
+  linea: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.bordeClaro,
+  },
+  separadorTexto: {
+    fontSize: tipografia.sm,
+    color: colors.textoSuave,
   },
   footerLink: {
     alignItems: "center",
