@@ -30,7 +30,7 @@ App móvil independiente de FerreStock 360 (React Native + Expo + TypeScript).
    | `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | SDK setup (messagingSenderId) |
    | `EXPO_PUBLIC_FIREBASE_APP_ID` | SDK setup (appId) |
 
-3. Habilita los proveedores en **Authentication → Sign-in method**: **Correo/contraseña** y **Google**.
+3. Habilita el proveedor en **Authentication → Sign-in method**: **Correo/contraseña**.
 
 4. Crea la base de datos en **Cloud Firestore** y publica las reglas de seguridad:
 
@@ -40,9 +40,7 @@ App móvil independiente de FerreStock 360 (React Native + Expo + TypeScript).
 
    (Requiere `npm install -g firebase-tools` y `firebase login`. Alternativa: pegar el contenido de `firestore.rules` en Firebase Console → Firestore → Reglas.)
 
-5. **Google Sign-In (opcional):** en Google Cloud Console → APIs & Services → Credentials, crea un **Web application** OAuth client y pon su valor en `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`. Agrega `https://auth.expo.io/@<tu-usuario>/<slug>` a *Authorized redirect URIs* (lo muestra Expo Go al autenticar). En la app usa el **slug** de `app.json` (`ferrestock360-mobile`).
-
-6. **Productos de demostración (opcional):** puebla Firestore con los productos de ejemplo:
+5. **Productos de demostración (opcional):** puebla Firestore con los productos de ejemplo:
 
    ```bash
    npm run seed -- --cuenta=C:\ruta\a\tu-service-account.json
@@ -76,7 +74,7 @@ Scripts disponibles:
 FerreStock360Mobile/
 ├── app/                    # Pantallas (Expo Router, rutas de archivo)
 │   ├── _layout.tsx         # Stack global + AuthProvider + protección de rutas
-│   ├── login.tsx           # Iniciar sesión (correo + Google + recuperar contraseña)
+│   ├── login.tsx           # Iniciar sesión (correo + contraseña + recuperar contraseña)
 │   ├── register.tsx        # Registro con validaciones
 │   ├── historial.tsx       # Historial de actividad (Firestore)
 │   └── (tabs)/             # Navegación con barra inferior
@@ -89,11 +87,11 @@ FerreStock360Mobile/
 │   ├── components/         # Brand, AppHeader, AppFooter, TextField, PrimaryButton,
 │   │                       # ProductCard, CategoryChip, SectionTitle, EstadoVacio,
 │   │                       # TabBarIcon, Banner
-│   ├── config/             # firebase.ts (init) y googleAuth.ts (Client IDs)
+│   ├── config/             # firebase.ts (init de Auth y Firestore)
 │   ├── constants/          # colors.ts (paleta) + theme.ts (espaciado, radios, tipografía)
 │   ├── contexts/           # AuthContext.tsx (sesión global)
 │   ├── data/               # mockProducts.ts (datos de demostración de respaldo)
-│   ├── hooks/              # useProductos, useFavoritos, useHistorial, useGoogleAuth
+│   ├── hooks/              # useProductos, useFavoritos, useHistorial, useAdminCatalogo
 │   ├── services/           # authService.ts y firestoreService.ts (acceso a Firebase)
 │   ├── types/              # Tipos compartidos + env.d.ts
 │   └── utils/              # firebaseErrors.ts (mensajes), fechas.ts
@@ -135,6 +133,6 @@ Paleta tomada de la web (`web/app/globals.css`):
 ## Pendiente (configuración manual)
 
 - Completar `.env` con los valores reales de Firebase Console.
-- Habilitar proveedores en Authentication → Sign-in method.
+- Habilitar el proveedor **Correo/contraseña** en Authentication → Sign-in method.
 - Publicar `firestore.rules`.
-- (Opcional) Configurar Google Sign-In (Web Client ID) y ejecutar `npm run seed`.
+- (Opcional) Ejecutar `npm run seed` para poblar productos de demostración.

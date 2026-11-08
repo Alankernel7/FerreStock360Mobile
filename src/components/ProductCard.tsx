@@ -1,4 +1,4 @@
-import { Image, StyleSheet, Text, View, ViewStyle } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View, ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../constants/colors";
 import { radio, sombra, tipografia } from "../constants/theme";
@@ -7,6 +7,9 @@ import { Producto } from "../types";
 type Props = {
   producto: Producto;
   ancho?: number;
+  favorito?: boolean;
+  onAlternarFavorito?: () => void;
+  onPress?: () => void;
 };
 
 const disponibilidad = (producto: Producto) => {
@@ -19,20 +22,52 @@ const disponibilidad = (producto: Producto) => {
   return { texto: "Disponible", fondo: colors.badgeVerdeBg, textoColor: colors.badgeVerdeTexto };
 };
 
-export default function ProductCard({ producto, ancho }: Props) {
+export default function ProductCard({
+  producto,
+  ancho,
+  favorito = false,
+  onAlternarFavorito,
+  onPress,
+}: Props) {
   const estado = disponibilidad(producto);
 
   const contenedor: ViewStyle =
     ancho !== undefined ? { width: ancho } : { flex: 1 };
 
   return (
-    <View style={[styles.tarjeta, contenedor]}>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? "button" : undefined}
+      accessibilityLabel={onPress ? `Ver detalle de ${producto.nombre}` : undefined}
+      style={({ pressed }) => [
+        styles.tarjeta,
+        contenedor,
+        pressed && !!onPress ? styles.tarjetaPresionada : null,
+      ]}
+    >
       <View style={styles.imagen}>
         <View style={[styles.badge, { backgroundColor: estado.fondo }]}>
           <Text style={[styles.badgeTexto, { color: estado.textoColor }]}>
             {estado.texto}
           </Text>
         </View>
+        {!!onAlternarFavorito && (
+          <Pressable
+            onPress={onAlternarFavorito}
+            hitSlop={8}
+            style={styles.corazon}
+            accessibilityLabel={
+              favorito ? "Quitar de favoritos" : "Agregar a favoritos"
+            }
+          >
+            <Ionicons
+              name={favorito ? "heart" : "heart-outline"}
+              size={21}
+              color={favorito ? colors.danger : colors.gray}
+            />
+          </Pressable>
+        )}
         {producto.imagen_url ? (
           <Image
             source={{ uri: producto.imagen_url }}
@@ -51,7 +86,7 @@ export default function ProductCard({ producto, ancho }: Props) {
         </Text>
         <Text style={styles.precio}>${producto.precio.toFixed(2)}</Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -63,6 +98,9 @@ const styles = StyleSheet.create({
     borderColor: colors.bordeClaro,
     ...sombra.suave,
     overflow: "hidden",
+  },
+  tarjetaPresionada: {
+    opacity: 0.92,
   },
   imagen: {
     backgroundColor: colors.light,
@@ -83,6 +121,18 @@ const styles = StyleSheet.create({
   badgeTexto: {
     fontSize: tipografia.xs,
     fontWeight: "700",
+  },
+  corazon: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    zIndex: 1,
+    width: 30,
+    height: 30,
+    borderRadius: radio.pill,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
   },
   foto: {
     width: "100%",

@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import Banner from "../src/components/Banner";
 import Brand from "../src/components/Brand";
@@ -20,16 +20,13 @@ import TextField from "../src/components/TextField";
 import { colors } from "../src/constants/colors";
 import { espaciado, radio, tipografia } from "../src/constants/theme";
 import { useAuth } from "../src/contexts/AuthContext";
-import { useGoogleAuth } from "../src/hooks/useGoogleAuth";
 import { mensajeErrorFirebase } from "../src/utils/firebaseErrors";
 
 type Errores = { email?: string; password?: string };
 
 export default function LoginScreen() {
-  const { iniciarSesion, iniciarSesionConGoogle, recuperarPassword, firebaseListo } =
-    useAuth();
-  const { solicitarGoogle, cargando: cargandoGoogle, disponible: googleDisponible } =
-    useGoogleAuth();
+  const { registro } = useLocalSearchParams<{ registro?: string }>();
+  const { iniciarSesion, recuperarPassword, firebaseListo } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,6 +34,7 @@ export default function LoginScreen() {
   const [errores, setErrores] = useState<Errores>({});
   const [cargando, setCargando] = useState(false);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
+  const [mensajeExito, setMensajeExito] = useState(registro === "1");
 
   const iniciarSesionEmail = async () => {
     const nuevos: Errores = {};
@@ -46,6 +44,7 @@ export default function LoginScreen() {
     if (Object.keys(nuevos).length > 0) return;
 
     setMensajeError(null);
+    setMensajeExito(false);
     setCargando(true);
     try {
       await iniciarSesion(email, password);
@@ -54,17 +53,6 @@ export default function LoginScreen() {
       setMensajeError(mensajeErrorFirebase(error));
     } finally {
       setCargando(false);
-    }
-  };
-
-  const iniciarSesionGoogle = async () => {
-    setMensajeError(null);
-    try {
-      const idToken = await solicitarGoogle();
-      if (!idToken) return; // El usuario canceló el flujo.
-      await iniciarSesionConGoogle(idToken);
-    } catch (error) {
-      setMensajeError(mensajeErrorFirebase(error));
     }
   };
 
@@ -109,6 +97,14 @@ export default function LoginScreen() {
               <Banner
                 tipo="error"
                 texto="Firebase no está configurado. Completa el archivo .env para iniciar sesión (ver .env.example)."
+              />
+            )}
+
+            {!!mensajeExito && (
+              <Banner
+                tipo="exito"
+                texto="¡Cuenta creada exitosamente! Ya puedes ingresar con tus credenciales."
+                onCerrar={() => setMensajeExito(false)}
               />
             )}
 
@@ -176,21 +172,6 @@ export default function LoginScreen() {
               titulo={cargando ? "Iniciando sesión..." : "Iniciar sesión"}
               onPress={iniciarSesionEmail}
               cargando={cargando}
-            />
-
-            <View style={styles.separador}>
-              <View style={styles.linea} />
-              <Text style={styles.separadorTexto}>o continúa con</Text>
-              <View style={styles.linea} />
-            </View>
-
-            <PrimaryButton
-              titulo="Google"
-              icono="logo-google"
-              variante="contorno"
-              onPress={iniciarSesionGoogle}
-              cargando={cargandoGoogle}
-              deshabilitado={!googleDisponible || cargando}
             />
 
             <Pressable
@@ -278,20 +259,6 @@ const styles = StyleSheet.create({
     fontSize: tipografia.sm,
     color: colors.yellowDark,
     fontWeight: "600",
-  },
-  separador: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: espaciado.md,
-  },
-  linea: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.bordeClaro,
-  },
-  separadorTexto: {
-    fontSize: tipografia.sm,
-    color: colors.textoSuave,
   },
   footerLink: {
     alignItems: "center",

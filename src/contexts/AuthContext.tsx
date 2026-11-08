@@ -20,6 +20,8 @@ type AuthContextValue = {
   usuario: PerfilUsuario | null;
   /** true mientras se detecta el estado inicial de autenticación. */
   cargandoSesion: boolean;
+  /** true mientras se está creando una cuenta (evita redirecciones prematuras). */
+  registrando: boolean;
   /** false si faltan variables de entorno de Firebase. */
   firebaseListo: boolean;
   iniciarSesion: (email: string, password: string) => Promise<void>;
@@ -28,7 +30,6 @@ type AuthContextValue = {
     email: string,
     password: string
   ) => Promise<void>;
-  iniciarSesionConGoogle: (idToken: string) => Promise<void>;
   cerrarSesion: () => Promise<void>;
   recuperarPassword: (email: string) => Promise<void>;
   actualizarNombre: (nombre: string) => Promise<void>;
@@ -60,6 +61,7 @@ function perfilLocal(user: User): PerfilUsuario {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<PerfilUsuario | null>(null);
   const [cargandoSesion, setCargandoSesion] = useState(true);
+  const [registrando, setRegistrando] = useState(false);
 
   useEffect(() => {
     if (!firebaseConfigurado) {
@@ -94,14 +96,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const registrar = useCallback(
     async (nombre: string, email: string, password: string) => {
-      await authService.registrarUsuario(nombre, email, password);
+      setRegistrando(true);
+      try {
+        await authService.registrarUsuario(nombre, email, password);
+      } finally {
+        setRegistrando(false);
+      }
     },
     []
   );
-
-  const iniciarSesionConGoogle = useCallback(async (idToken: string) => {
-    await authService.iniciarSesionConGoogle(idToken);
-  }, []);
 
   const cerrarSesion = useCallback(async () => {
     await authService.cerrarSesion();
@@ -127,10 +130,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const valor: AuthContextValue = {
     usuario,
     cargandoSesion,
+    registrando,
     firebaseListo: firebaseConfigurado,
     iniciarSesion,
     registrarUsuario: registrar,
-    iniciarSesionConGoogle,
     cerrarSesion,
     recuperarPassword,
     actualizarNombre,

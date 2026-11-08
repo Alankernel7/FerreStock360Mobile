@@ -16,8 +16,7 @@
       "package": "com.ferrestock360.mobile"
     },
     "plugins": [
-      "expo-router",
-      "expo-web-browser"
+      "expo-router"
     ]
   }
 }

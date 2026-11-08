@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getCountFromServer,
   getDoc,
   getDocs,
   query,
@@ -14,8 +15,11 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import type { User } from "firebase/auth";
-import { dbFirestore, firebaseConfigurado } from "../config/firebase";
-import { CATEGORIAS, PRODUCTOS } from "../data/mockProducts";
+import {
+  dbFirestore,
+  firebaseConfigurado,
+  mensajeConfigFirebase,
+} from "../config/firebase";
 import type {
   Actividad,
   Categoria,
@@ -92,12 +96,6 @@ function mapearPerfil(snapshot: QueryDocumentSnapshot<DocumentData>): PerfilUsua
 
 function mapearProducto(snapshot: QueryDocumentSnapshot<DocumentData>): Producto {
   const data = snapshot.data();
-  const nombreCategoria = aTexto(data.categoria);
-  const idCategoria = aNumero(
-    data.categoria_id,
-    CATEGORIAS.find((c) => c.nombre.toLowerCase() === nombreCategoria.toLowerCase())
-      ?.id_categoria ?? 0
-  );
   return {
     id_producto: snapshot.id,
     nombre: aTexto(data.nombre, "Sin nombre"),
@@ -107,7 +105,7 @@ function mapearProducto(snapshot: QueryDocumentSnapshot<DocumentData>): Producto
     imagen_url: typeof data.imagen_url === "string" ? data.imagen_url : null,
     stock_actual: aNumero(data.stock_actual),
     stock_minimo: aNumero(data.stock_minimo),
-    id_categoria: idCategoria,
+    id_categoria: aNumero(data.categoria_id),
     estado: aBooleano(data.estado, true),
     fecha_creacion: aISO(data.fecha_creacion),
   };
@@ -162,7 +160,7 @@ export async function obtenerPerfilUsuario(uid: string): Promise<PerfilUsuario |
 
 /**
  * Crea (o sobrescribe con merge) el documento de perfil del usuario.
- * Se usa al registrarse y al iniciar sesión con Google.
+ * Se usa al registrarse y al iniciar sesión con correo y contraseña.
  */
 export async function crearPerfilUsuario(
   user: User,
@@ -232,64 +230,165 @@ export async function actualizarPerfilUsuario(
 // Productos y categorías (catálogo público)
 // ---------------------------------------------------------------------------
 
-export type ResultadoCatalogo = {
+export type ResultadoProductos = {
   productos: Producto[];
-  /** true cuando se muestran datos de demostración en lugar de Firestore. */
-  esDemo: boolean;
   /** Mensaje de error si la consulta a Firestore falló. */
   error: string | null;
 };
 
 /**
- * Consulta los productos activos en Firestore.
- * Si Firestore no está configurado, está vacío o la consulta falla,
- * devuelve los datos de demostración claramente identificados.
+ * Consulta los productos en Firestore (fuente de verdad del catálogo).
+ * `incluirInactivos` permite que el panel administrativo vea también los
+ * productos con estado inactivo.
  */
-export async function obtenerProductos(): Promise<ResultadoCatalogo> {
+export async function obtenerProductos(
+  incluirInactivos = false
+): Promise<ResultadoProductos> {
   if (!firebaseConfigurado || !dbFirestore) {
-    return { productos: PRODUCTOS, esDemo: true, error: null };
+    return { productos: [], error: mensajeConfigFirebase };
   }
   try {
     const db = obtenerDb();
-    const consulta = query(
-      collection(db, COLECCIONES.productos),
-      where("estado", "==", true)
-    );
+    const base = collection(db, COLECCIONES.productos);
+    const consulta = incluirInactivos
+      ? query(base)
+      : query(base, where("estado", "==", true));
     const snapshot = await getDocs(consulta);
-    const productos = snapshot.docs.map(mapearProducto);
-    if (productos.length === 0) {
-      return { productos: PRODUCTOS, esDemo: true, error: null };
-    }
-    return { productos, esDemo: false, error: null };
+    return { productos: snapshot.docs.map(mapearProducto), error: null };
   } catch (error) {
     console.warn("[firestore] Error al consultar productos:", error);
     return {
-      productos: PRODUCTOS,
-      esDemo: true,
-      error: "No se pudo consultar Firestore. Mostrando datos de demostración.",
+      productos: [],
+      error: "No se pudieron cargar los productos. Revisa tu conexión e intenta de nuevo.",
     };
   }
 }
 
-/**
- * Consulta las categorías en Firestore; si no hay datos, usa las de demostración.
- */
-export async function obtenerCategorias(): Promise<{
+export type ResultadoCategorias = {
   categorias: Categoria[];
-  esDemo: boolean;
-}> {
+  error: string | null;
+};
+
+/** Consulta las categorías en Firestore (fuente de verdad del catálogo). */
+export async function obtenerCategorias(): Promise<ResultadoCategorias> {
   if (!firebaseConfigurado || !dbFirestore) {
-    return { categorias: CATEGORIAS, esDemo: true };
+    return { categorias: [], error: mensajeConfigFirebase };
   }
   try {
     const db = obtenerDb();
     const snapshot = await getDocs(collection(db, COLECCIONES.categorias));
-    if (snapshot.empty) return { categorias: CATEGORIAS, esDemo: true };
-    return { categorias: snapshot.docs.map(mapearCategoria), esDemo: false };
+    const categorias = snapshot.docs
+      .map(mapearCategoria)
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+    return { categorias, error: null };
   } catch (error) {
     console.warn("[firestore] Error al consultar categorías:", error);
-    return { categorias: CATEGORIAS, esDemo: true };
+    return {
+      categorias: [],
+      error: "No se pudieron cargar las categorías. Revisa tu conexión e intenta de nuevo.",
+    };
   }
+}
+
+/** Campos editables de un producto (los que escribe el administrador). */
+export type DatosProducto = {
+  nombre: string;
+  descripcion: string | null;
+  codigo: string;
+  precio: number;
+  imagen_url: string | null;
+  stock_actual: number;
+  stock_minimo: number;
+  id_categoria: number;
+  estado: boolean;
+};
+
+/** Crea un producto en Firestore (solo administradores por reglas). */
+export async function crearProducto(datos: DatosProducto): Promise<void> {
+  const db = obtenerDb();
+  await addDoc(collection(db, COLECCIONES.productos), {
+    ...datos,
+    fecha_creacion: serverTimestamp(),
+    actualizado_en: serverTimestamp(),
+  });
+}
+
+/** Actualiza un producto existente en Firestore. */
+export async function actualizarProducto(
+  id: ProductoId,
+  datos: DatosProducto
+): Promise<void> {
+  const db = obtenerDb();
+  await updateDoc(doc(db, COLECCIONES.productos, String(id)), {
+    ...datos,
+    actualizado_en: serverTimestamp(),
+  });
+}
+
+/** Elimina un producto de Firestore. */
+export async function eliminarProducto(id: ProductoId): Promise<void> {
+  const db = obtenerDb();
+  await deleteDoc(doc(db, COLECCIONES.productos, String(id)));
+}
+
+/** Campos editables de una categoría. */
+export type DatosCategoria = {
+  nombre: string;
+  descripcion: string | null;
+};
+
+/**
+ * Crea una categoría con el siguiente `id_categoria` disponible.
+ * El id del documento es `String(id_categoria)`, igual que los datos existentes.
+ */
+export async function crearCategoria(datos: DatosCategoria): Promise<void> {
+  const db = obtenerDb();
+  const snapshot = await getDocs(collection(db, COLECCIONES.categorias));
+  const ids = snapshot.docs
+    .map((documento) => Number(documento.id))
+    .filter((n) => !Number.isNaN(n));
+  const siguiente = (ids.length > 0 ? Math.max(...ids) : 0) + 1;
+
+  await setDoc(doc(db, COLECCIONES.categorias, String(siguiente)), {
+    id_categoria: siguiente,
+    nombre: datos.nombre.trim(),
+    descripcion: datos.descripcion,
+    actualizado_en: serverTimestamp(),
+  });
+}
+
+/** Actualiza una categoría existente. */
+export async function actualizarCategoria(
+  id: number,
+  datos: DatosCategoria
+): Promise<void> {
+  const db = obtenerDb();
+  await updateDoc(doc(db, COLECCIONES.categorias, String(id)), {
+    id_categoria: id,
+    nombre: datos.nombre.trim(),
+    descripcion: datos.descripcion,
+    actualizado_en: serverTimestamp(),
+  });
+}
+
+/** Elimina una categoría de Firestore. */
+export async function eliminarCategoria(id: number): Promise<void> {
+  const db = obtenerDb();
+  await deleteDoc(doc(db, COLECCIONES.categorias, String(id)));
+}
+
+/** Cuenta los productos asociados a una categoría (para advertir antes de borrar). */
+export async function contarProductosDeCategoria(
+  idCategoria: number
+): Promise<number> {
+  const db = obtenerDb();
+  const resultado = await getCountFromServer(
+    query(
+      collection(db, COLECCIONES.productos),
+      where("categoria_id", "==", idCategoria)
+    )
+  );
+  return resultado.data().count;
 }
 
 // ---------------------------------------------------------------------------
@@ -316,10 +415,12 @@ export async function obtenerFavoritos(uid: string): Promise<Favorito[]> {
 /**
  * Agrega o quita un producto de los favoritos del usuario.
  * Devuelve true si el producto quedó agregado, false si se quitó.
+ * `categoriaNombre` se guarda como snapshot para mostrar en la lista.
  */
 export async function alternarFavorito(
   uid: string,
-  producto: Producto
+  producto: Producto,
+  categoriaNombre = ""
 ): Promise<{ agregado: boolean }> {
   const db = obtenerDb();
   const referencia = doc(
@@ -327,9 +428,18 @@ export async function alternarFavorito(
     COLECCIONES.favoritos,
     idFavorito(uid, producto.id_producto)
   );
-  const snapshot = await getDoc(referencia);
 
-  if (snapshot.exists()) {
+  // La regla de lectura de `favorites` solo autoriza documentos existentes del
+  // propio usuario. Consultar un favorito que todavía no existe produce
+  // "permission denied", por lo que se interpreta como "no existe" y se crea.
+  let existe = false;
+  try {
+    existe = (await getDoc(referencia)).exists();
+  } catch {
+    existe = false;
+  }
+
+  if (existe) {
     await deleteDoc(referencia);
     return { agregado: false };
   }
@@ -342,17 +452,38 @@ export async function alternarFavorito(
     imagen_url: producto.imagen_url,
     stock_actual: producto.stock_actual,
     stock_minimo: producto.stock_minimo,
-    categoria: categoriaDeProducto(producto),
+    categoria: categoriaNombre,
     creado_en: serverTimestamp(),
   });
   return { agregado: true };
 }
 
-function categoriaDeProducto(producto: Producto): string {
-  return (
-    CATEGORIAS.find((c) => c.id_categoria === producto.id_categoria)?.nombre ??
-    "Sin categoría"
+// ---------------------------------------------------------------------------
+// Usuarios (administración)
+// ---------------------------------------------------------------------------
+
+/**
+ * Lista todos los perfiles de usuario. Requiere que la regla de Firestore
+ * permita la lectura a administradores (`allow read: if esAdmin()`).
+ */
+export async function obtenerUsuarios(): Promise<PerfilUsuario[]> {
+  const db = obtenerDb();
+  const snapshot = await getDocs(collection(db, COLECCIONES.usuarios));
+  return snapshot.docs
+    .map(mapearPerfil)
+    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+
+/**
+ * Cuenta los usuarios registrados sin descargar los documentos
+ * (indicador del resumen del panel administrativo).
+ */
+export async function contarUsuarios(): Promise<number> {
+  const db = obtenerDb();
+  const resultado = await getCountFromServer(
+    collection(db, COLECCIONES.usuarios)
   );
+  return resultado.data().count;
 }
 
 // ---------------------------------------------------------------------------

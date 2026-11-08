@@ -10,9 +10,6 @@ declare const process: {
     EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET?: string;
     EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID?: string;
     EXPO_PUBLIC_FIREBASE_APP_ID?: string;
-    EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?: string;
-    EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID?: string;
-    EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?: string;
     [clave: string]: string | undefined;
   };
 };

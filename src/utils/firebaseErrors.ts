@@ -15,11 +15,6 @@ const MENSAJES_FIREBASE: Record<string, string> = {
     "No se pudo conectar con el servidor. Verifica tu conexión a internet.",
   "auth/operation-not-allowed":
     "Este método de inicio de sesión no está habilitado en Firebase Console.",
-  "auth/popup-closed-by-user":
-    "La ventana de Google se cerró antes de completar el inicio de sesión.",
-  "auth/cancelled-popup-request": "Se canceló la ventana de Google.",
-  "auth/popup-blocked":
-    "El navegador bloqueó la ventana de Google. Permite las ventanas emergentes.",
   "auth/requires-recent-login":
     "Por seguridad, vuelve a iniciar sesión para continuar.",
   "auth/timeout": "La operación tardó demasiado. Intenta nuevamente.",

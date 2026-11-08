@@ -14,7 +14,6 @@ import { formatearFecha } from "../src/utils/fechas";
 const ICONOS: Record<TipoActividad, keyof typeof Ionicons.glyphMap> = {
   registro: "person-add-outline",
   login: "log-in-outline",
-  login_google: "logo-google",
   logout: "log-out-outline",
   perfil_actualizado: "create-outline",
   favorito_agregado: "heart",
@@ -24,7 +23,6 @@ const ICONOS: Record<TipoActividad, keyof typeof Ionicons.glyphMap> = {
 const ETIQUETAS: Record<TipoActividad, string> = {
   registro: "Registro",
   login: "Inicio de sesión",
-  login_google: "Inicio con Google",
   logout: "Cierre de sesión",
   perfil_actualizado: "Perfil actualizado",
   favorito_agregado: "Favorito agregado",

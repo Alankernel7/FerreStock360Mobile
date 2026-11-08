@@ -63,7 +63,6 @@ export interface Favorito {
 export type TipoActividad =
   | "registro"
   | "login"
-  | "login_google"
   | "logout"
   | "perfil_actualizado"
   | "favorito_agregado"

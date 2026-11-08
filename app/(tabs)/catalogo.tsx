@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -13,9 +14,11 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AppFooter from "../../src/components/AppFooter";
 import AppHeader from "../../src/components/AppHeader";
+import Banner from "../../src/components/Banner";
 import CategoryChip from "../../src/components/CategoryChip";
 import EstadoVacio from "../../src/components/EstadoVacio";
 import ProductCard from "../../src/components/ProductCard";
+import ProductoDetalleModal from "../../src/components/ProductoDetalleModal";
 import { colors } from "../../src/constants/colors";
 import {
   ALTURA_TOQUE,
@@ -23,8 +26,11 @@ import {
   radio,
   tipografia,
 } from "../../src/constants/theme";
-import { CATEGORIAS, PRODUCTOS } from "../../src/data/mockProducts";
+import { useAuth } from "../../src/contexts/AuthContext";
+import { useFavoritos } from "../../src/hooks/useFavoritos";
+import { useProductos } from "../../src/hooks/useProductos";
 import { Producto } from "../../src/types";
+import { mensajeErrorFirebase } from "../../src/utils/firebaseErrors";
 
 type Orden = "default" | "precioAsc" | "precioDesc";
 
@@ -42,19 +48,23 @@ const sinTildes = (texto: string) =>
 
 export default function CatalogoScreen() {
   const params = useLocalSearchParams<{ categoria?: string }>();
+  const { usuario } = useAuth();
+  const {
+    productos: todosProductos,
+    categorias,
+    cargando,
+    error,
+  } = useProductos();
+  const { idsFavoritos, alternar } = useFavoritos(usuario?.uid ?? null);
 
-  const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [categoria, setCategoria] = useState<number | null>(
     params.categoria !== undefined ? Number(params.categoria) : null
   );
   const [orden, setOrden] = useState<Orden>("default");
   const [modalOrden, setModalOrden] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setCargando(false), 600);
-    return () => clearTimeout(timer);
-  }, []);
+  const [productoSeleccionado, setProductoSeleccionado] =
+    useState<Producto | null>(null);
 
   useEffect(() => {
     if (params.categoria !== undefined) {
@@ -65,7 +75,7 @@ export default function CatalogoScreen() {
   const productos = useMemo(() => {
     const texto = sinTildes(busqueda.trim());
 
-    let lista: Producto[] = PRODUCTOS.filter((p) => {
+    let lista: Producto[] = todosProductos.filter((p) => {
       const coincideCategoria =
         categoria === null || p.id_categoria === categoria;
       const coincideBusqueda =
@@ -82,13 +92,41 @@ export default function CatalogoScreen() {
     }
 
     return lista;
-  }, [busqueda, categoria, orden]);
+  }, [todosProductos, busqueda, categoria, orden]);
 
   const hayFiltro = busqueda.trim() !== "" || categoria !== null;
+
+  const alternarFavorito = async (producto: Producto) => {
+    const nombreCategoria =
+      categorias.find((c) => c.id_categoria === producto.id_categoria)?.nombre ??
+      "";
+    try {
+      await alternar(producto, nombreCategoria);
+    } catch (e) {
+      Alert.alert("Favoritos", mensajeErrorFirebase(e));
+    }
+  };
 
   const cabecera = (
     <View style={styles.zonaControles}>
       <Text style={styles.titulo}>Catálogo</Text>
+
+      {usuario?.rol === "admin" && (
+        <Pressable
+          style={styles.botonAdmin}
+          onPress={() => router.push("/admin")}
+          accessibilityLabel="Volver al panel administrador"
+        >
+          <Ionicons
+            name="shield-checkmark-outline"
+            size={16}
+            color={colors.black}
+          />
+          <Text style={styles.botonAdminTexto}>Volver al panel administrador</Text>
+        </Pressable>
+      )}
+
+      {!!error && <Banner tipo="error" texto={error} />}
 
       <View style={styles.buscador}>
         <Ionicons name="search-outline" size={18} color={colors.textoSuave} />
@@ -124,7 +162,7 @@ export default function CatalogoScreen() {
           activa={categoria === null}
           onPress={() => setCategoria(null)}
         />
-        {CATEGORIAS.map((c) => (
+        {categorias.map((c) => (
           <CategoryChip
             key={c.id_categoria}
             etiqueta={c.nombre}
@@ -161,9 +199,10 @@ export default function CatalogoScreen() {
     <View style={styles.pantalla}>
       <AppHeader>
         <Pressable
-          onPress={() => router.push("/login")}
+          onPress={() => router.push(usuario ? "/perfil" : "/login")}
           hitSlop={8}
           style={styles.botonHeader}
+          accessibilityLabel={usuario ? "Mi perfil" : "Iniciar sesión"}
         >
           <Ionicons name="person-outline" size={22} color={colors.white} />
         </Pressable>
@@ -175,7 +214,16 @@ export default function CatalogoScreen() {
         numColumns={2}
         columnWrapperStyle={styles.filaLista}
         contentContainerStyle={styles.lista}
-        renderItem={({ item }) => <ProductCard producto={item} />}
+        renderItem={({ item }) => (
+          <ProductCard
+            producto={item}
+            favorito={idsFavoritos.has(String(item.id_producto))}
+            onPress={() => setProductoSeleccionado(item)}
+            onAlternarFavorito={
+              usuario ? () => alternarFavorito(item) : undefined
+            }
+          />
+        )}
         ListHeaderComponent={cabecera}
         ListEmptyComponent={
           cargando ? (
@@ -232,6 +280,29 @@ export default function CatalogoScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      <ProductoDetalleModal
+        producto={productoSeleccionado}
+        visible={productoSeleccionado !== null}
+        categoriaNombre={
+          productoSeleccionado
+            ? categorias.find(
+                (c) => c.id_categoria === productoSeleccionado.id_categoria
+              )?.nombre ?? ""
+            : ""
+        }
+        favorito={
+          productoSeleccionado
+            ? idsFavoritos.has(String(productoSeleccionado.id_producto))
+            : false
+        }
+        onAlternarFavorito={
+          usuario && productoSeleccionado
+            ? () => alternarFavorito(productoSeleccionado)
+            : undefined
+        }
+        onCerrar={() => setProductoSeleccionado(null)}
+      />
     </View>
   );
 }
@@ -265,6 +336,21 @@ const styles = StyleSheet.create({
   },
   titulo: {
     fontSize: tipografia.xl + 3,
+    fontWeight: "700",
+    color: colors.black,
+  },
+  botonAdmin: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: espaciado.sm,
+    backgroundColor: colors.yellow,
+    borderRadius: radio.sm,
+    paddingVertical: 11,
+    paddingHorizontal: espaciado.md,
+  },
+  botonAdminTexto: {
+    fontSize: tipografia.sm,
     fontWeight: "700",
     color: colors.black,
   },

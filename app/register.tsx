@@ -16,7 +16,7 @@ import Brand from "../src/components/Brand";
 import PrimaryButton from "../src/components/PrimaryButton";
 import TextField from "../src/components/TextField";
 import { colors } from "../src/constants/colors";
-import { espaciado, radio, tipografia } from "../src/constants/theme";
+import { espaciado, tipografia } from "../src/constants/theme";
 import { useAuth } from "../src/contexts/AuthContext";
 import { mensajeErrorFirebase } from "../src/utils/firebaseErrors";
 
@@ -36,7 +36,6 @@ export default function RegisterScreen() {
   const [confirmar, setConfirmar] = useState("");
   const [errores, setErrores] = useState<Errores>({});
   const [cargando, setCargando] = useState(false);
-  const [exito, setExito] = useState<string | null>(null);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
 
   const limpiarError = (campo: keyof Errores) => {
@@ -59,12 +58,12 @@ export default function RegisterScreen() {
     setMensajeError(null);
     setCargando(true);
     try {
+      // El registro cierra la sesión automáticamente: el usuario debe
+      // iniciar sesión manualmente en la pantalla de login.
       await registrarUsuario(nombre, email, password);
-      setExito("Cuenta creada correctamente. Redirigiendo al inicio...");
-      // La redirección la gestiona el AuthContext con la sesión activa.
+      router.replace({ pathname: "/login", params: { registro: "1" } });
     } catch (error) {
       setMensajeError(mensajeErrorFirebase(error));
-    } finally {
       setCargando(false);
     }
   };
@@ -105,12 +104,6 @@ export default function RegisterScreen() {
                 texto={mensajeError}
                 onCerrar={() => setMensajeError(null)}
               />
-            )}
-
-            {!!exito && (
-              <View style={styles.bannerExito}>
-                <Text style={styles.bannerExitoTexto}>{exito}</Text>
-              </View>
             )}
 
             <TextField
@@ -165,7 +158,6 @@ export default function RegisterScreen() {
               titulo={cargando ? "Creando cuenta..." : "Registrarse"}
               onPress={registrar}
               cargando={cargando}
-              deshabilitado={!!exito}
             />
 
             <Pressable
@@ -219,17 +211,6 @@ const styles = StyleSheet.create({
   subtitulo: {
     fontSize: tipografia.sm + 1,
     color: colors.textoSecundario,
-  },
-  bannerExito: {
-    backgroundColor: colors.exitoBg,
-    borderWidth: 1,
-    borderColor: colors.exitoBorde,
-    borderRadius: radio.sm,
-    padding: espaciado.md,
-  },
-  bannerExitoTexto: {
-    color: colors.exitoTexto,
-    fontSize: tipografia.sm,
   },
   footerLink: {
     alignItems: "center",

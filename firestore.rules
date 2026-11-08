@@ -15,8 +15,10 @@ service cloud.firestore {
 
     // ---------------------------------------------------------------- users
     match /users/{uid} {
-      // Cada usuario solo puede leer su propio perfil.
-      allow read: if request.auth != null && request.auth.uid == uid;
+      // Cada usuario lee su propio perfil; un admin puede leer todos
+      // (necesario para el listado de usuarios del panel administrativo).
+      allow read: if request.auth != null &&
+        (request.auth.uid == uid || esAdmin());
 
       // El usuario autenticado crea SU perfil con rol inicial "usuario"
       // (impide autoasignarse otro rol al registrarse).

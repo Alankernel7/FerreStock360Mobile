@@ -12,14 +12,25 @@ const RUTAS_AUTH = ["login", "register"];
 const RUTAS_PRIVADAS = ["favoritos", "perfil", "historial"];
 
 function NavegadorRaiz() {
-  const { usuario, cargandoSesion } = useAuth();
+  const { usuario, cargandoSesion, registrando } = useAuth();
   // Los segmentos se leen como lista genérica para cubrir rutas de tabs y stack.
   const segments = useSegments() as string[];
 
   useEffect(() => {
-    if (cargandoSesion) return;
+    if (cargandoSesion || registrando) return;
 
     const primero = segments[0] as string | undefined;
+
+    // Panel administrativo: solo para administradores autenticados.
+    if (primero === "admin") {
+      if (!usuario) {
+        router.replace("/login");
+      } else if (usuario.rol !== "admin") {
+        router.replace("/");
+      }
+      return;
+    }
+
     const dentroTabs = primero === "(tabs)";
     const rutaActual = dentroTabs
       ? ((segments[1] as string | undefined) ?? "index")
@@ -32,10 +43,13 @@ function NavegadorRaiz() {
       // Pantalla privada sin sesión → login.
       router.replace("/login");
     } else if (usuario && esAuth) {
-      // Sesión activa dentro de login/registro → pantalla principal.
-      router.replace("/");
+      // Sesión activa dentro de login/registro → destino según el rol.
+      // Un rol distinto de "admin" (p. ej. "usuario" o "empleado") va al
+      // catálogo público, por lo que un rol desconocido nunca obtiene
+      // acceso administrativo.
+      router.replace(usuario.rol === "admin" ? "/admin" : "/catalogo");
     }
-  }, [usuario, cargandoSesion, segments]);
+  }, [usuario, cargandoSesion, segments, registrando]);
 
   if (cargandoSesion) {
     // Evita parpadeos mientras se restaura la sesión desde AsyncStorage.
@@ -63,6 +77,10 @@ function NavegadorRaiz() {
         />
         <Stack.Screen
           name="historial"
+          options={{ animation: "slide_from_right" }}
+        />
+        <Stack.Screen
+          name="admin"
           options={{ animation: "slide_from_right" }}
         />
       </Stack>

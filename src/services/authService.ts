@@ -1,12 +1,11 @@
 import {
   createUserWithEmailAndPassword,
-  GoogleAuthProvider,
   onAuthStateChanged,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
-  signInWithCredential,
   signOut,
   updateProfile,
+  type Auth,
   type User,
 } from "firebase/auth";
 import { authFirebase, firebaseConfigurado } from "../config/firebase";
@@ -35,8 +34,27 @@ function requerirConfiguracion() {
 }
 
 /**
+ * Espera a que el estado de autenticación quede sin sesión.
+ * Evita la condición de carrera del registro: no se debe navegar a login
+ * mientras Firebase aún notifica al usuario recién creado.
+ */
+function esperarSinSesion(auth: Auth): Promise<void> {
+  return new Promise((resolve) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        unsubscribe();
+        resolve();
+      }
+    });
+  });
+}
+
+/**
  * Registra un usuario con correo y contraseña y crea su documento de perfil
  * en Firestore con rol inicial "usuario".
+ *
+ * Al finalizar cierra la sesión automáticamente: el registro tradicional
+ * NO debe dejar al usuario dentro de la app; debe iniciar sesión manualmente.
  */
 export async function registrarUsuario(
   nombre: string,
@@ -74,6 +92,11 @@ export async function registrarUsuario(
     "registro",
     `Cuenta creada con correo ${email.trim()}`
   );
+
+  // Cierre de sesión deliberado tras el registro (no es un "logout" del
+  // usuario, por eso no se registra en el historial).
+  await signOut(auth);
+  await esperarSinSesion(auth);
 
   return credencial.user;
 }
@@ -115,27 +138,6 @@ export async function iniciarSesion(
   );
 
   return credencial.user;
-}
-
-/**
- * Inicia sesión con Google a partir del id_token obtenido con
- * expo-auth-session (Google.useIdTokenAuthRequest).
- */
-export async function iniciarSesionConGoogle(idToken: string): Promise<User> {
-  requerirConfiguracion();
-  const auth = obtenerAuth();
-
-  const credencial = GoogleAuthProvider.credential(idToken);
-  const resultado = await signInWithCredential(auth, credencial);
-
-  await asegurarPerfilUsuario(resultado.user, { proveedor: "google" });
-  await registrarActividad(
-    resultado.user.uid,
-    "login_google",
-    "Inicio de sesión con Google"
-  );
-
-  return resultado.user;
 }
 
 /** Envía un correo de recuperación de contraseña. */

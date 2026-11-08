@@ -200,6 +200,29 @@ export default function PerfilScreen() {
           )}
         </View>
 
+        {usuario.rol === "admin" && (
+          <View style={styles.tarjeta}>
+            <Pressable
+              style={styles.filaAccion}
+              onPress={() => router.push("/admin")}
+            >
+              <View style={styles.filaAccionIzq}>
+                <Ionicons
+                  name="construct-outline"
+                  size={20}
+                  color={colors.black}
+                />
+                <Text style={styles.filaAccionTexto}>Panel administrativo</Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={colors.textoSuave}
+              />
+            </Pressable>
+          </View>
+        )}
+
         <View style={styles.tarjeta}>
           <Pressable
             style={styles.filaAccion}
