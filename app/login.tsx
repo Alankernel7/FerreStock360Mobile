@@ -83,6 +83,28 @@ export default function LoginScreen() {
           contentContainerStyle={styles.contenido}
           keyboardShouldPersistTaps="handled"
         >
+          <Pressable
+            onPress={() => router.replace("/")}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              alignSelf: "flex-start",
+              gap: 8,
+              marginBottom: 16,
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Volver al inicio"
+          >
+            <Ionicons
+              name="arrow-back"
+              size={22}
+              color={colors.black}
+            />
+            <Text style={{ color: colors.black, fontWeight: "600" }}>
+              Volver al inicio
+            </Text>
+          </Pressable>
+
           <View style={styles.marca}>
             <Brand variante="sobreClaro" tamano={24} />
           </View>
