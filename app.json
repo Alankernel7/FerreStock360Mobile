@@ -16,7 +16,11 @@
       "package": "com.ferrestock360.mobile"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      ["expo-image-picker", {
+        "photosPermission": "Permite seleccionar imágenes de productos desde tu fototeca.",
+        "microphonePermission": false
+      }]
     ]
   }
 }
