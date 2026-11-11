@@ -26,8 +26,12 @@ type Errores = { email?: string; password?: string };
 
 export default function LoginScreen() {
   const { registro } = useLocalSearchParams<{ registro?: string }>();
-  const { iniciarSesion, recuperarPassword, firebaseListo } = useAuth();
-
+const {
+  iniciarSesion,
+  iniciarSesionGoogle,
+  recuperarPassword,
+  firebaseListo,
+} = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [recordarme, setRecordarme] = useState(false);
@@ -55,6 +59,19 @@ export default function LoginScreen() {
       setCargando(false);
     }
   };
+
+  const iniciarConGoogle = async () => {
+  setMensajeError(null);
+  setCargando(true);
+
+  try {
+    await iniciarSesionGoogle();
+  } catch (error) {
+    setMensajeError(mensajeErrorFirebase(error));
+  } finally {
+    setCargando(false);
+  }
+};
 
   const recuperar = async () => {
     if (!email.trim()) {
@@ -195,6 +212,24 @@ export default function LoginScreen() {
               onPress={iniciarSesionEmail}
               cargando={cargando}
             />
+            <Pressable
+  onPress={iniciarConGoogle}
+  disabled={cargando || !firebaseListo}
+  style={[
+    styles.googleBoton,
+    (cargando || !firebaseListo) && { opacity: 0.5 },
+  ]}
+>
+  <Ionicons
+    name="logo-google"
+    size={22}
+    color={colors.black}
+  />
+
+  <Text style={styles.googleBotonTexto}>
+    Continuar con Google
+  </Text>
+</Pressable>
 
             <Pressable
               style={styles.footerLink}
@@ -294,4 +329,21 @@ const styles = StyleSheet.create({
     color: colors.yellowDark,
     fontWeight: "700",
   },
+  googleBoton: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: espaciado.sm,
+  paddingVertical: espaciado.md,
+  borderWidth: 1,
+  borderRadius: radio.md,
+  borderColor: colors.borde,
+  backgroundColor: colors.white,
+},
+
+googleBotonTexto: {
+  color: colors.black,
+  fontWeight: "600",
+  fontSize: tipografia.sm + 1,
+},
 });

@@ -13,14 +13,29 @@
     },
     "android": {
       "edgeToEdgeEnabled": true,
-      "package": "com.ferrestock360.mobile"
+      "package": "com.ferrestock360.mobile",
+      "googleServicesFile": "./google-services.json"
     },
     "plugins": [
       "expo-router",
-      ["expo-image-picker", {
-        "photosPermission": "Permite seleccionar imágenes de productos desde tu fototeca.",
-        "microphonePermission": false
-      }]
-    ]
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permite seleccionar imágenes de productos desde tu fototeca.",
+          "microphonePermission": false
+        }
+      ],
+      "@react-native-google-signin/google-signin"
+    ],
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "d147c18d-e845-4a52-851b-219aee2b460a"
+      }
+    }
   }
 }
