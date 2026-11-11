@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import AppHeader from "../../src/components/AppHeader";
 import Banner from "../../src/components/Banner";
 import CategoryChip from "../../src/components/CategoryChip";
@@ -29,6 +30,8 @@ import {
   tipografia,
 } from "../../src/constants/theme";
 import { useAdminCatalogo } from "../../src/hooks/useAdminCatalogo";
+import { useAuth } from "../../src/contexts/AuthContext";
+import { subirImagenProducto } from "../../src/services/cloudinary";
 import {
   actualizarProducto,
   crearProducto,
@@ -81,6 +84,7 @@ const ESTADOS: { valor: FiltroEstado; etiqueta: string }[] = [
 ];
 
 export default function AdminProductosScreen() {
+  const { usuario } = useAuth();
   const { productos, categorias, cargando, error, recargar } =
     useAdminCatalogo();
 
@@ -92,6 +96,7 @@ export default function AdminProductosScreen() {
   const [formulario, setFormulario] = useState<Formulario>(FORMULARIO_VACIO);
   const [errores, setErrores] = useState<Errores>({});
   const [guardando, setGuardando] = useState(false);
+  const [imagenLocal, setImagenLocal] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
 
   const nombreCategoria = (id: number) =>
@@ -116,6 +121,7 @@ export default function AdminProductosScreen() {
     busqueda.trim() !== "" || filtro !== "todas" || filtroEstado !== "todos";
 
   const abrirNuevo = () => {
+    setImagenLocal(null);
     setEditando(null);
     setFormulario(FORMULARIO_VACIO);
     setErrores({});
@@ -124,6 +130,7 @@ export default function AdminProductosScreen() {
   };
 
   const abrirEditar = (producto: Producto) => {
+    setImagenLocal(null);
     setEditando(producto);
     setFormulario({
       nombre: producto.nombre,
@@ -147,6 +154,30 @@ export default function AdminProductosScreen() {
   ) => {
     setFormulario((actual) => ({ ...actual, [campo]: valor }));
     if (errores[campo]) setErrores((actual) => ({ ...actual, [campo]: undefined }));
+  };
+
+  const seleccionarImagen = async () => {
+    if (guardando) return;
+    if (usuario?.rol !== "admin") {
+      Alert.alert("Acceso denegado", "Solo un administrador puede subir imágenes.");
+      return;
+    }
+
+    try {
+      const resultado = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
+      });
+      if (resultado.canceled || !resultado.assets?.[0]) return;
+      setImagenLocal(resultado.assets[0]);
+      setErrores((actual) => ({ ...actual, imagen_url: undefined }));
+      setMensajeError(null);
+    } catch (error) {
+      Alert.alert("Fototeca", "No se pudo seleccionar la imagen.");
+    }
   };
 
   const validar = (): Errores => {
@@ -174,7 +205,7 @@ export default function AdminProductosScreen() {
       nuevos.stock_minimo = "Ingresa un stock mínimo válido (entero mayor o igual a 0).";
     if (formulario.id_categoria === null)
       nuevos.id_categoria = "Selecciona una categoría.";
-    const urlImagen = formulario.imagen_url.trim();
+    const urlImagen = imagenLocal ? "" : formulario.imagen_url.trim();
     if (urlImagen !== "" && !/^https?:\/\/.+/i.test(urlImagen))
       nuevos.imagen_url = "Ingresa una URL válida (http:// o https://).";
 
@@ -182,6 +213,7 @@ export default function AdminProductosScreen() {
   };
 
   const guardar = async () => {
+    if (guardando) return;
     const nuevos = validar();
     setErrores(nuevos);
     if (Object.keys(nuevos).length > 0) return;
@@ -189,7 +221,13 @@ export default function AdminProductosScreen() {
     setGuardando(true);
     setMensajeError(null);
     try {
-      const imagenUrl = formulario.imagen_url.trim();
+      if (usuario?.rol !== "admin") {
+        throw new Error("Solo un administrador puede guardar productos.");
+      }
+      // La subida se realiza al guardar, no al seleccionar: cancelar no crea archivos.
+      const imagenUrl = imagenLocal
+        ? await subirImagenProducto(imagenLocal)
+        : formulario.imagen_url.trim();
 
       const datos: DatosProducto = {
         nombre: formulario.nombre.trim(),
@@ -367,7 +405,7 @@ export default function AdminProductosScreen() {
         visible={modalVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={() => { if (!guardando) setModalVisible(false); }}
       >
         <KeyboardAvoidingView
           style={styles.modalFondo}
@@ -378,7 +416,7 @@ export default function AdminProductosScreen() {
               <Text style={styles.modalTitulo}>
                 {editando ? "Editar producto" : "Nuevo producto"}
               </Text>
-              <Pressable onPress={() => setModalVisible(false)} hitSlop={8}>
+              <Pressable onPress={() => setModalVisible(false)} disabled={guardando} hitSlop={8}>
                 <Ionicons name="close" size={22} color={colors.gray} />
               </Pressable>
             </View>
@@ -451,15 +489,43 @@ export default function AdminProductosScreen() {
                 </View>
               </View>
 
-              <TextField
-                etiqueta="Imagen (URL)"
-                valor={formulario.imagen_url}
-                onChangeText={(t) => cambiar("imagen_url", t)}
-                placeholder="https://ejemplo.com/imagen.jpg"
-                keyboardType="url"
-                autoCapitalize="none"
-                error={errores.imagen_url}
-              />
+              <View style={styles.grupo}>
+                <Text style={styles.grupoEtiqueta}>Imagen del producto</Text>
+                <Pressable
+                  onPress={seleccionarImagen}
+                  disabled={guardando}
+                  style={styles.botonFototeca}
+                  accessibilityRole="button"
+                  accessibilityLabel="Seleccionar imagen desde la fototeca"
+                >
+                  <Ionicons name="images-outline" size={20} color={colors.black} />
+                  <Text style={styles.textoFototeca}>Elegir de la fototeca</Text>
+                </Pressable>
+                {(imagenLocal?.uri || /^https?:\/\//.test(formulario.imagen_url)) && (
+                  <Image
+                    source={{ uri: imagenLocal?.uri ?? formulario.imagen_url.trim() }}
+                    style={styles.vistaPrevia}
+                    resizeMode="contain"
+                  />
+                )}
+                {!!imagenLocal && (
+                  <Text style={styles.ayuda}>
+                    La imagen se subirá al guardar el producto.
+                  </Text>
+                )}
+                <TextField
+                  etiqueta="O ingresar imagen (URL)"
+                  valor={formulario.imagen_url}
+                  onChangeText={(t) => {
+                    setImagenLocal(null);
+                    cambiar("imagen_url", t);
+                  }}
+                  placeholder="https://ejemplo.com/imagen.jpg"
+                  keyboardType="url"
+                  autoCapitalize="none"
+                  error={errores.imagen_url}
+                />
+              </View>
 
               <View style={styles.grupo}>
                 <Text style={styles.grupoEtiqueta}>Categoría *</Text>
@@ -513,6 +579,7 @@ export default function AdminProductosScreen() {
                   titulo="Cancelar"
                   variante="contorno"
                   onPress={() => setModalVisible(false)}
+                  deshabilitado={guardando}
                   estilo={styles.accionMitad}
                 />
                 <PrimaryButton
@@ -796,6 +863,26 @@ const styles = StyleSheet.create({
   },
   grupo: {
     gap: espaciado.sm,
+  },
+  botonFototeca: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: colors.borde,
+    borderRadius: radio.sm,
+  },
+  textoFototeca: {
+    color: colors.black,
+    fontWeight: "600",
+  },
+  vistaPrevia: {
+    width: 120,
+    height: 120,
+    backgroundColor: colors.light,
+    borderRadius: radio.sm,
   },
   grupoEtiqueta: {
     fontSize: tipografia.sm + 1,

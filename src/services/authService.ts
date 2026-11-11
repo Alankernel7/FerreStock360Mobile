@@ -15,6 +15,9 @@ import {
   crearPerfilUsuario,
   registrarActividad,
 } from "./firestoreService";
+import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
+import { Platform } from "react-native";
+import Constants from "expo-constants";
 
 function obtenerAuth() {
   if (!authFirebase) {
@@ -138,6 +141,74 @@ export async function iniciarSesion(
   );
 
   return credencial.user;
+}
+
+export async function iniciarSesionGoogle(): Promise<boolean> {
+  requerirConfiguracion();
+
+  if (Constants.appOwnership === "expo") {
+    throw new Error(
+      "Google Sign-In requiere una development build."
+    );
+  }
+
+  const webClientId =
+    process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim();
+
+  if (!webClientId) {
+    throw new Error(
+      "Falta EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID en .env."
+    );
+  }
+
+  const { GoogleSignin, isSuccessResponse } = await import(
+    "@react-native-google-signin/google-signin"
+  );
+
+  GoogleSignin.configure({
+    webClientId,
+    iosClientId:
+      process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim(),
+  });
+
+  if (Platform.OS === "android") {
+    await GoogleSignin.hasPlayServices({
+      showPlayServicesUpdateDialog: true,
+    });
+  }
+
+  const respuesta = await GoogleSignin.signIn();
+
+  if (!isSuccessResponse(respuesta)) {
+    return false;
+  }
+
+  const idToken = respuesta.data.idToken;
+
+  if (!idToken) {
+    throw new Error(
+      "Google no devolvió un ID token."
+    );
+  }
+
+  const credencial = GoogleAuthProvider.credential(idToken);
+
+  const resultado = await signInWithCredential(
+    obtenerAuth(),
+    credencial
+  );
+
+  await asegurarPerfilUsuario(resultado.user, {
+    proveedor: "google",
+  });
+
+  await registrarActividad(
+    resultado.user.uid,
+    "login",
+    "Inicio de sesión con Google"
+  );
+
+  return true;
 }
 
 /** Envía un correo de recuperación de contraseña. */

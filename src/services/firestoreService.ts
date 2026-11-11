@@ -105,7 +105,10 @@ function mapearProducto(snapshot: QueryDocumentSnapshot<DocumentData>): Producto
     imagen_url: typeof data.imagen_url === "string" ? data.imagen_url : null,
     stock_actual: aNumero(data.stock_actual),
     stock_minimo: aNumero(data.stock_minimo),
-    id_categoria: aNumero(data.categoria_id),
+    id_categoria: aNumero(
+      data.categoria_id,
+      aNumero(data.id_categoria)
+    ),
     estado: aBooleano(data.estado, true),
     fecha_creacion: aISO(data.fecha_creacion),
   };
@@ -306,8 +309,12 @@ export type DatosProducto = {
 /** Crea un producto en Firestore (solo administradores por reglas). */
 export async function crearProducto(datos: DatosProducto): Promise<void> {
   const db = obtenerDb();
+
+  const { id_categoria, ...resto } = datos;
+
   await addDoc(collection(db, COLECCIONES.productos), {
-    ...datos,
+    ...resto,
+    categoria_id: id_categoria,
     fecha_creacion: serverTimestamp(),
     actualizado_en: serverTimestamp(),
   });
@@ -319,8 +326,12 @@ export async function actualizarProducto(
   datos: DatosProducto
 ): Promise<void> {
   const db = obtenerDb();
+
+  const { id_categoria, ...resto } = datos;
+
   await updateDoc(doc(db, COLECCIONES.productos, String(id)), {
-    ...datos,
+    ...resto,
+    categoria_id: id_categoria,
     actualizado_en: serverTimestamp(),
   });
 }
